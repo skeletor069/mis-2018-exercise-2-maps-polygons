@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">polygons</string>
     <string name="title_activity_maps">Map</string>
+    <string name="KEY_next_pos">nextPos</string>
+    <string name="KEY_Lat_">lat_</string>
+    <string name="KEY_Long_">long_</string>
+    <string name="KEY_message_">message_</string>
 </resources>

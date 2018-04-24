@@ -8,17 +8,58 @@
     android:layout_height="match_parent"
     tools:context=".MapsActivity">
 
+    <!--<RelativeLayout-->
+
+        <!--android:layout_width="500dp"-->
+        <!--android:layout_height="60dp">-->
+
+        <!---->
+
+    <!--</RelativeLayout>-->
     <EditText
-        android:id="@+id/editText1"
-        android:layout_width="wrap_content"
+        android:id="@+id/customDescription"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="left|top"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="10dp"
+        android:background="@android:color/background_light"
         android:ems="10"
-        android:inputType="text"
         android:hint="Marker Description"
-        android:padding="10dp"
-        android:labelFor="@+id/editText1">
-        <requestFocus/>
+        android:inputType="text"
+        android:labelFor="@+id/customDescription"
+        android:padding="10dp">
+
+        <requestFocus />
     </EditText>
+
+
+    <RelativeLayout
+        android:id="@+id/startupScreen"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:background="@color/colorPrimary">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageButton
+                android:id="@+id/resetBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:src="@android:drawable/ic_menu_rotate"
+                android:visibility="invisible" />
+        </RelativeLayout>
+
+        <TextView
+            android:id="@+id/infoText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Loading..." />
+
+
+    </RelativeLayout>
 
 </fragment>
