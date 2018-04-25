@@ -11,6 +11,7 @@ import android.preference.PreferenceManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.RelativeLayout;
@@ -19,15 +20,27 @@ import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.GoogleMap.OnMapLongClickListener;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static android.location.LocationManager.*;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+
+    public class MarkerData{
+        public double latitude;
+        public double longitude;
+        public String message;
+        public LatLng latLng;
+    }
 
     private GoogleMap mMap;
     SupportMapFragment mapFragment;
@@ -35,10 +48,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     double longitude;
     double latitude;
     ImageButton resetBtn;
+    Button polygonBtn;
     TextView infoText;
     EditText customDescriptionEdtTxt;
     SharedPreferences defaultPref;
 
+    ArrayList<MarkerData> markerData = new ArrayList<MarkerData>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +80,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         resetBtn = (ImageButton) findViewById(R.id.resetBtn);
         infoText = (TextView) findViewById(R.id.infoText);
         customDescriptionEdtTxt = (EditText) findViewById(R.id.customDescription);
+        polygonBtn = (Button) findViewById(R.id.polygonBtn);
+
 
         resetBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -74,6 +91,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 if (StartupCheckSuccess()) {
                     MoveMapToMyLocation();
                 }
+            }
+        });
+
+        polygonBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                PolygonOptions rectOptions = new PolygonOptions();
+
+                for(MarkerData data : markerData){
+                    rectOptions.add(data.latLng);
+                }
+
+                Polygon polygon = mMap.addPolygon(rectOptions);
+
             }
         });
     }
@@ -153,6 +184,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                     int nextPos = defaultPref.getInt(getResources().getString(R.string.KEY_next_pos),0);
 
+                    MarkerData temp = new MarkerData();
+                    temp.latitude = latLng.latitude;
+                    temp.longitude = latLng.longitude;
+                    temp.message = customDescriptionEdtTxt.getText().toString();
+                    temp.latLng = latLng;
+                    markerData.add(temp);
+
                     SharedPreferences.Editor editor = defaultPref.edit();
                     editor.putLong(getResources().getString(R.string.KEY_Lat_)+nextPos, (long) latLng.latitude);
                     editor.putLong(getResources().getString(R.string.KEY_Long_)+nextPos, (long) latLng.longitude);
@@ -173,12 +211,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         for(int i = 0; i < defaultPref.getInt(getResources().getString(R.string.KEY_next_pos), 0); i++){
             if(defaultPref.contains(getResources().getString(R.string.KEY_Lat_) + i)){
-                float lat = (float) defaultPref.getLong(getResources().getString(R.string.KEY_Lat_) + i, 0);
-                float lng = (float) defaultPref.getLong(getResources().getString(R.string.KEY_Long_) + i, 0);
-                String message = defaultPref.getString(getResources().getString(R.string.KEY_message_) + i, "");
 
-                LatLng pos = new LatLng(lat,lng);
-                mMap.addMarker(new MarkerOptions().position(pos).title(message));
+                MarkerData temp = new MarkerData();
+
+                temp.latitude = (double) defaultPref.getLong(getResources().getString(R.string.KEY_Lat_) + i, 0);
+                temp.longitude = (double) defaultPref.getLong(getResources().getString(R.string.KEY_Long_) + i, 0);
+                temp.message = defaultPref.getString(getResources().getString(R.string.KEY_message_) + i, "");
+                temp.latLng = new LatLng(temp.latitude,temp.longitude);
+                mMap.addMarker(new MarkerOptions().position(temp.latLng).title(temp.message));
+
+                markerData.add(temp);
             }
         }
 
