@@ -3,13 +3,13 @@ package com.example.mis.polygons;
 import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.FragmentActivity;
-import android.os.Bundle;
-import android.preference.PreferenceManager;
-
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.FragmentActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -18,20 +18,23 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.common.data.DataHolder;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.model.Polygon;
-import com.google.android.gms.maps.model.PolygonOptions;
-import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.GoogleMap.OnMapLongClickListener;
+import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.LatLngBounds.Builder;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
 
 import java.util.ArrayList;
-import java.util.List;
 
-import static android.location.LocationManager.*;
+import static android.location.LocationManager.GPS_PROVIDER;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
@@ -52,8 +55,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     TextView infoText;
     EditText customDescriptionEdtTxt;
     SharedPreferences defaultPref;
+    Polygon polygon;
+    Marker centroidMarker;
+
+    double EARTH_RADIUS = 6371009;
+
+    boolean polygonOnScreen = false;
 
     ArrayList<MarkerData> markerData = new ArrayList<MarkerData>();
+    ArrayList<MarkerData> sessionMarkerData = new ArrayList<MarkerData>();
+    ArrayList<Marker> sessionMarkers = new ArrayList<Marker>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +76,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (StartupCheckSuccess()) {
             MoveMapToMyLocation();
         }
+
     }
 
     void InitVars(){
@@ -97,16 +109,78 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         polygonBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                PolygonOptions rectOptions = new PolygonOptions();
-
-                for(MarkerData data : markerData){
-                    rectOptions.add(data.latLng);
-                }
-
-                Polygon polygon = mMap.addPolygon(rectOptions);
-
+                if(!polygonOnScreen)
+                    DrawPolygonUsingMarkerData();
+                else
+                    RemovePreviousPolgon();
+                //sessionMarkerData.clear();
             }
         });
+
+
+    }
+
+    void RemovePreviousPolgon(){
+
+        for (Marker marker : sessionMarkers){
+            marker.remove();
+        }
+
+        sessionMarkerData.clear();
+        sessionMarkers.clear();
+        polygonBtn.setText("Start Polygon");
+        if(polygon != null)
+            polygon.remove();
+        if(centroidMarker != null)
+            centroidMarker.remove();
+        polygonOnScreen = false;
+    }
+
+    void DrawPolygonUsingMarkerData(){
+
+        if(sessionMarkerData.size() < 3){
+            ShowLongToast("You need atleast 3 markers to draw polygon.");
+            return;
+        }
+
+        PolygonOptions rectOptions = new PolygonOptions();
+        rectOptions.fillColor(0x669999FF);
+
+        Log.d("sessionDataValid", (sessionMarkerData == null) ? "Null": "Ok");
+
+        for(MarkerData data : sessionMarkerData){
+            rectOptions.add(data.latLng);
+            Log.d("sessionDataValidLoop", (sessionMarkerData == null) ? "Null": "Ok");
+        }
+
+        Log.d("sessionDataValidLoop", "Ended");
+
+        polygon = mMap.addPolygon(rectOptions);
+        polygonBtn.setText("End Polygon");
+        CalculateAreaOfPolygon();
+        polygonOnScreen = true;
+
+    }
+
+    void CalculateAreaOfPolygon(){
+
+        LatLng centerLatLng = null;
+
+        ArrayList<LatLng> temp = new ArrayList<LatLng>();
+
+        Builder builder = new LatLngBounds.Builder();
+        for(int i = 0 ; i < sessionMarkerData.size() ; i++)
+        {
+            builder.include(sessionMarkerData.get(i).latLng);
+            temp.add(sessionMarkerData.get(i).latLng);
+        }
+        LatLngBounds bounds = builder.build();
+        centerLatLng =  bounds.getCenter();
+
+        MarkerOptions op = new MarkerOptions().position(centerLatLng).title("Are of polygon : " + ComputeSignedArea(temp, EARTH_RADIUS) + "sqm");
+        centroidMarker = mMap.addMarker(op);
+
+
     }
 
     void MoveMapToMyLocation() {
@@ -179,7 +253,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onMapLongClick(LatLng latLng) {
                 if(!customDescriptionEdtTxt.getText().toString().trim().equals("")) {
-                    mMap.addMarker(new MarkerOptions().position(latLng).title(customDescriptionEdtTxt.getText().toString()));
+                    MarkerOptions op = new MarkerOptions().position(latLng).title(customDescriptionEdtTxt.getText().toString());
+                    Marker marker = mMap.addMarker(op);
+                    sessionMarkers.add(marker);
 
 
                     int nextPos = defaultPref.getInt(getResources().getString(R.string.KEY_next_pos),0);
@@ -190,6 +266,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     temp.message = customDescriptionEdtTxt.getText().toString();
                     temp.latLng = latLng;
                     markerData.add(temp);
+                    sessionMarkerData.add(temp);
 
                     SharedPreferences.Editor editor = defaultPref.edit();
                     editor.putLong(getResources().getString(R.string.KEY_Lat_)+nextPos, (long) latLng.latitude);
@@ -209,6 +286,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
+        // Add a marker in Sydney and move the camera
+        LatLng yourLocation = new LatLng(latitude, longitude);
+        mMap.addMarker(new MarkerOptions().position(yourLocation).title("You!!!"));
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(yourLocation));
+    }
+
+    private void ShowAllPreviousMarkers() {
         for(int i = 0; i < defaultPref.getInt(getResources().getString(R.string.KEY_next_pos), 0); i++){
             if(defaultPref.contains(getResources().getString(R.string.KEY_Lat_) + i)){
 
@@ -223,11 +307,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 markerData.add(temp);
             }
         }
-
-        // Add a marker in Sydney and move the camera
-        LatLng yourLocation = new LatLng(latitude, longitude);
-        mMap.addMarker(new MarkerOptions().position(yourLocation).title("You!!!"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(yourLocation));
     }
 
     void ShowLongToast(String text){
@@ -236,5 +315,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     void ShowShortToast(String text){
         Toast.makeText(getApplicationContext(),text, Toast.LENGTH_SHORT).show();
+    }
+
+    static double ComputeSignedArea(ArrayList<LatLng> path, double radius)
+    {
+        int size = path.size();
+        if (size < 3) { return 0; }
+        double total = 0;
+        LatLng prev = path.get(size - 1);
+        double prevTanLat = Math.tan((Math.PI / 2 - Math.toRadians(prev.latitude)) / 2);
+        double prevLng = Math.toRadians(prev.longitude);
+
+        for (LatLng point : path)
+        {
+            double tanLat = Math.tan((Math.PI / 2 - Math.toRadians(point.latitude)) / 2);
+            double lng = Math.toRadians(point.longitude);
+            total += PolarTriangleArea(tanLat, lng, prevTanLat, prevLng);
+            prevTanLat = tanLat;
+            prevLng = lng;
+        }
+        return total * (radius * radius);
+    }
+
+    static double PolarTriangleArea(double tan1, double lng1, double tan2, double lng2)
+    {
+        double deltaLng = lng1 - lng2;
+        double t = tan1 * tan2;
+        return 2 * Math.atan2(t * Math.sin(deltaLng), 1 + t * Math.cos(deltaLng));
     }
 }
