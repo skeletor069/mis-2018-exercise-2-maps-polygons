@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -18,7 +19,6 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.common.data.DataHolder;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.GoogleMap.OnMapLongClickListener;
@@ -31,12 +31,16 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.maps.android.SphericalUtil;
+
 
 import java.util.ArrayList;
 
 import static android.location.LocationManager.GPS_PROVIDER;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, LocationListener {
+
+
 
     public class MarkerData{
         public double latitude;
@@ -46,10 +50,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private GoogleMap mMap;
+    LocationManager lm;
     SupportMapFragment mapFragment;
     RelativeLayout startupScreen;
-    double longitude;
-    double latitude;
     ImageButton resetBtn;
     Button polygonBtn;
     TextView infoText;
@@ -57,8 +60,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     SharedPreferences defaultPref;
     Polygon polygon;
     Marker centroidMarker;
-
-    double EARTH_RADIUS = 6371009;
 
     boolean polygonOnScreen = false;
 
@@ -74,8 +75,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         InitVars();
 
         if (StartupCheckSuccess()) {
-            MoveMapToMyLocation();
+            InitMap();
         }
+
 
     }
 
@@ -101,7 +103,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 resetBtn.setVisibility(View.INVISIBLE);
                 infoText.setText("Loading...");
                 if (StartupCheckSuccess()) {
-                    MoveMapToMyLocation();
+                    InitMap();
                 }
             }
         });
@@ -177,21 +179,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         LatLngBounds bounds = builder.build();
         centerLatLng =  bounds.getCenter();
 
-        MarkerOptions op = new MarkerOptions().position(centerLatLng).title("Are of polygon : " + ComputeSignedArea(temp, EARTH_RADIUS) + "sqm");
+        MarkerOptions op = new MarkerOptions().position(centerLatLng).title("Area : " + SphericalUtil.computeArea(temp) + "sqm");
         centroidMarker = mMap.addMarker(op);
 
 
     }
 
-    void MoveMapToMyLocation() {
-        LocationManager lm = (LocationManager) getSystemService(android.content.Context.LOCATION_SERVICE);
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
-            return;
-        }
-        Location location = lm.getLastKnownLocation(GPS_PROVIDER);
-        longitude = location.getLongitude();
-        latitude = location.getLatitude();
+    void InitMap() {
         mapFragment.getMapAsync(this);
     }
 
@@ -226,7 +220,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     //allowed
                     //startupScreen.setVisibility(View.GONE);
                     Toast.makeText(this,"Location Access permission granted.", Toast.LENGTH_SHORT).show();
-                    MoveMapToMyLocation();
+                    InitMap();
                 } else{
                     //set to never ask again
                     Toast.makeText(this,"Go to settings and accept location access permission.", Toast.LENGTH_LONG).show();
@@ -286,10 +280,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
-        // Add a marker in Sydney and move the camera
-        LatLng yourLocation = new LatLng(latitude, longitude);
-        mMap.addMarker(new MarkerOptions().position(yourLocation).title("You!!!"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(yourLocation));
+        lm = (LocationManager) getSystemService(android.content.Context.LOCATION_SERVICE);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            return;
+        }
+        lm.requestLocationUpdates(GPS_PROVIDER,0,0,this);
+        ShowShortToast("Trying to locate you.");
+
     }
 
     private void ShowAllPreviousMarkers() {
@@ -317,30 +315,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Toast.makeText(getApplicationContext(),text, Toast.LENGTH_SHORT).show();
     }
 
-    static double ComputeSignedArea(ArrayList<LatLng> path, double radius)
-    {
-        int size = path.size();
-        if (size < 3) { return 0; }
-        double total = 0;
-        LatLng prev = path.get(size - 1);
-        double prevTanLat = Math.tan((Math.PI / 2 - Math.toRadians(prev.latitude)) / 2);
-        double prevLng = Math.toRadians(prev.longitude);
-
-        for (LatLng point : path)
-        {
-            double tanLat = Math.tan((Math.PI / 2 - Math.toRadians(point.latitude)) / 2);
-            double lng = Math.toRadians(point.longitude);
-            total += PolarTriangleArea(tanLat, lng, prevTanLat, prevLng);
-            prevTanLat = tanLat;
-            prevLng = lng;
-        }
-        return total * (radius * radius);
+    @Override
+    public void onLocationChanged(Location location) {
+        LatLng yourLocation = new LatLng(location.getLatitude(), location.getLongitude());
+        mMap.addMarker(new MarkerOptions().position(yourLocation).title("You!!!"));
+        lm.removeUpdates(this);
+        ShowShortToast("You have been located!!");
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(yourLocation,12.0f));
     }
 
-    static double PolarTriangleArea(double tan1, double lng1, double tan2, double lng2)
-    {
-        double deltaLng = lng1 - lng2;
-        double t = tan1 * tan2;
-        return 2 * Math.atan2(t * Math.sin(deltaLng), 1 + t * Math.cos(deltaLng));
+    @Override
+    public void onStatusChanged(String s, int i, Bundle bundle) {
+
     }
+
+    @Override
+    public void onProviderEnabled(String s) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String s) {
+
+    }
+
 }
+
